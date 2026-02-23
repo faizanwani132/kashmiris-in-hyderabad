@@ -5,7 +5,6 @@ import MemberDetailsSheet from './components/features/MemberDetailsSheet'
 import NearbyControls from './components/features/NearbyControls'
 import CommunityMap from './components/map/CommunityMap'
 import EmptyState from './components/ui/EmptyState'
-import LoadingSkeleton from './components/ui/LoadingSkeleton'
 import {
   DEFAULT_CITY,
   DEFAULT_RADIUS_KM,
@@ -217,8 +216,6 @@ function App() {
           onRadiusChange={setRadiusKm}
           onClear={() => setNearbyCenter(null)}
         />
-
-        {isLoading ? <LoadingSkeleton /> : null}
 
         {appMessage ? (
           <div className="pointer-events-auto mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
