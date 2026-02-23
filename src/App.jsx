@@ -87,6 +87,7 @@ function App() {
   const [isFindingNearby, setIsFindingNearby] = useState(false)
   const [isAddSheetOpen, setIsAddSheetOpen] = useState(false)
   const [isNearbyCollapsed, setIsNearbyCollapsed] = useState(true)
+  const [isHeatmapEnabled, setIsHeatmapEnabled] = useState(true)
   const [selectedMember, setSelectedMember] = useState(null)
   const [appMessage, setAppMessage] = useState('')
   const [radiusKm, setRadiusKm] = useState(DEFAULT_RADIUS_KM)
@@ -213,6 +214,7 @@ function App() {
         center={mapCenter}
         nearbyCenter={nearbyCenter}
         nearbyRadiusKm={nearbyCenter ? radiusKm : 0}
+        isHeatmapEnabled={isHeatmapEnabled}
         isMobile={isMobile}
         onMemberClick={setSelectedMember}
       />
@@ -239,9 +241,11 @@ function App() {
           radiusKm={radiusKm}
           isFinding={isFindingNearby}
           autoCenter={autoCenterMap}
+          isHeatmapEnabled={isHeatmapEnabled}
           isCollapsed={isNearbyCollapsed}
           onToggleCollapsed={() => setIsNearbyCollapsed((previous) => !previous)}
           onAutoCenterChange={setAutoCenterMap}
+          onHeatmapToggle={setIsHeatmapEnabled}
           onFindNearby={handleFindNearby}
           onRadiusChange={setRadiusKm}
           onClear={() => setNearbyCenter(null)}

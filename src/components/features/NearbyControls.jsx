@@ -1,5 +1,6 @@
 import {
   ChevronUp,
+  Flame,
   Loader2,
   LocateFixed,
   LocateOff,
@@ -14,9 +15,11 @@ const NearbyControls = ({
   radiusKm,
   isFinding,
   autoCenter,
+  isHeatmapEnabled,
   isCollapsed,
   onToggleCollapsed,
   onAutoCenterChange,
+  onHeatmapToggle,
   onFindNearby,
   onRadiusChange,
   onClear,
@@ -34,6 +37,11 @@ const NearbyControls = ({
           {nearbyCenter ? (
             <span className="absolute -right-1 -top-1 rounded-full bg-saffron px-1.5 py-0.5 text-[10px] font-bold text-slate-900">
               {radiusKm}
+            </span>
+          ) : null}
+          {isHeatmapEnabled ? (
+            <span className="absolute -bottom-1 -left-1 rounded-full bg-slate-900 px-1.5 py-0.5 text-[9px] font-semibold text-white">
+              Heat
             </span>
           ) : null}
         </button>
@@ -92,6 +100,20 @@ const NearbyControls = ({
         >
           {autoCenter ? <LocateFixed size={12} /> : <LocateOff size={12} />}
           {autoCenter ? 'On' : 'Off'}
+        </button>
+      </div>
+
+      <div className="mt-2 flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2">
+        <span className="text-xs font-medium text-slate-700">Heatmap</span>
+        <button
+          type="button"
+          onClick={() => onHeatmapToggle(!isHeatmapEnabled)}
+          className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${
+            isHeatmapEnabled ? 'bg-saffron/30 text-slate-900' : 'bg-slate-200 text-slate-700'
+          }`}
+        >
+          <Flame size={12} className={isHeatmapEnabled ? '' : 'opacity-45'} />
+          {isHeatmapEnabled ? 'On' : 'Off'}
         </button>
       </div>
 

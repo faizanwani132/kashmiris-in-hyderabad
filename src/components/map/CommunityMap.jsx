@@ -1,4 +1,6 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
+import L from 'leaflet'
+import 'leaflet.heat'
 import {
   Circle,
   CircleMarker,
@@ -10,6 +12,51 @@ import {
 } from 'react-leaflet'
 import MarkerClusterGroup from 'react-leaflet-cluster'
 import { createClusterIcon, communityMarkerIcon } from '../../lib/mapIcons'
+
+const buildHeatmapData = (members) => {
+  const groupedByCoordinate = new Map()
+
+  members.forEach((member) => {
+    const key = `${member.lat},${member.lng}`
+    groupedByCoordinate.set(key, (groupedByCoordinate.get(key) ?? 0) + 1)
+  })
+
+  return Array.from(groupedByCoordinate.entries()).map(([coordinateKey, count]) => {
+    const [lat, lng] = coordinateKey.split(',').map(Number)
+    const intensity = Math.min(1, 0.35 + count * 0.15)
+    return [lat, lng, intensity]
+  })
+}
+
+const HeatmapLayer = ({ members, isEnabled }) => {
+  const map = useMap()
+
+  const heatPoints = useMemo(() => buildHeatmapData(members), [members])
+
+  useEffect(() => {
+    if (!isEnabled || heatPoints.length === 0) return undefined
+
+    const heatLayer = L.heatLayer(heatPoints, {
+      radius: 34,
+      blur: 28,
+      maxZoom: 15,
+      minOpacity: 0.22,
+      gradient: {
+        0.2: '#2A6F6B',
+        0.45: '#F4A261',
+        0.7: '#E76F51',
+        1: '#B23A48',
+      },
+    })
+
+    heatLayer.addTo(map)
+    return () => {
+      map.removeLayer(heatLayer)
+    }
+  }, [heatPoints, isEnabled, map])
+
+  return null
+}
 
 const MapStability = () => {
   const map = useMap()
@@ -86,6 +133,7 @@ const CommunityMap = ({
   center,
   nearbyCenter,
   nearbyRadiusKm,
+  isHeatmapEnabled,
   isMobile,
   onMemberClick,
 }) => (
@@ -105,6 +153,7 @@ const CommunityMap = ({
 
     <MapStability />
     <MapAutoCenter center={center} />
+    <HeatmapLayer members={members} isEnabled={isHeatmapEnabled} />
 
     {nearbyCenter && nearbyRadiusKm ? (
       <>
