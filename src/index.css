@@ -1,0 +1,195 @@
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Nunito+Sans:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: 'Nunito Sans', sans-serif;
+  color: #13211f;
+  background: #fafafa;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  overflow-x: hidden;
+  background: #fafafa;
+}
+
+#root {
+  min-height: 100dvh;
+}
+
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+  background: #eff4f1;
+  font-family: 'Nunito Sans', sans-serif;
+}
+
+.leaflet-control-attribution {
+  font-size: 10px;
+}
+
+.heritage-panel {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(150deg, rgba(244, 162, 97, 0.95), rgba(42, 111, 107, 0.9));
+}
+
+.heritage-panel::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 15% 20%, rgba(250, 250, 250, 0.25) 0, rgba(250, 250, 250, 0) 45%),
+    radial-gradient(circle at 80% 75%, rgba(250, 250, 250, 0.16) 0, rgba(250, 250, 250, 0) 40%),
+    repeating-linear-gradient(120deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.08) 6px, transparent 6px, transparent 14px);
+  pointer-events: none;
+}
+
+.animate-sheet-up {
+  animation: sheet-up 240ms ease-out forwards;
+}
+
+.animate-fade-in {
+  animation: fade-in 180ms ease-out forwards;
+}
+
+.animate-pin-drop {
+  animation: pin-drop 320ms ease-out both;
+}
+
+@keyframes sheet-up {
+  from {
+    transform: translateY(24px);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes pin-drop {
+  0% {
+    transform: translateY(-16px) scale(0.86);
+    opacity: 0;
+  }
+
+  70% {
+    transform: translateY(0) scale(1.04);
+    opacity: 1;
+  }
+
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+.kashmiri-pin-wrapper,
+.kashmiri-picker-pin-wrapper,
+.kashmiri-cluster-wrapper {
+  background: transparent;
+  border: 0;
+}
+
+.kashmiri-pin,
+.kashmiri-picker-pin {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.kashmiri-pin {
+  width: 40px;
+  height: 50px;
+}
+
+.kashmiri-picker-pin {
+  width: 56px;
+  height: 70px;
+}
+
+.kashmiri-pin__leaf {
+  width: 28px;
+  height: 38px;
+  border-radius: 76% 20% 76% 20%;
+  transform: rotate(44deg);
+  background: linear-gradient(145deg, #f4a261, #d97539);
+  box-shadow: 0 10px 20px rgba(16, 24, 40, 0.22);
+}
+
+.kashmiri-picker-pin .kashmiri-pin__leaf {
+  width: 34px;
+  height: 46px;
+}
+
+.kashmiri-pin__dot {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 9999px;
+  background: #fafafa;
+  box-shadow: 0 0 0 3px rgba(42, 111, 107, 0.35);
+}
+
+.kashmiri-picker-pin .kashmiri-pin__dot {
+  width: 12px;
+  height: 12px;
+}
+
+.kashmiri-pin::after,
+.kashmiri-picker-pin::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  background: #2a6f6b;
+}
+
+.kashmiri-picker-pin::after {
+  width: 10px;
+  height: 10px;
+}
+
+.kashmiri-picker-pin {
+  animation: pin-drop 320ms ease-out both;
+}
+
+.kashmiri-cluster {
+  width: 46px;
+  height: 46px;
+  border-radius: 9999px;
+  display: grid;
+  place-items: center;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.7);
+  background: radial-gradient(circle at 30% 30%, #f4a261 0, #dc7c3f 45%, #2a6f6b 100%);
+  box-shadow: 0 8px 22px rgba(20, 29, 40, 0.25);
+}
