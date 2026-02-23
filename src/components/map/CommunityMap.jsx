@@ -1,4 +1,6 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
+import L from 'leaflet'
+import 'leaflet.heat'
 import {
   Circle,
   CircleMarker,
@@ -10,6 +12,100 @@ import {
 } from 'react-leaflet'
 import MarkerClusterGroup from 'react-leaflet-cluster'
 import { createClusterIcon, communityMarkerIcon } from '../../lib/mapIcons'
+
+const buildHeatmapData = (members) => {
+  const groupedByCoordinate = new Map()
+
+  members.forEach((member) => {
+    const key = `${member.lat},${member.lng}`
+    groupedByCoordinate.set(key, (groupedByCoordinate.get(key) ?? 0) + 1)
+  })
+
+  return Array.from(groupedByCoordinate.entries()).map(([coordinateKey, count]) => {
+    const [lat, lng] = coordinateKey.split(',').map(Number)
+    const intensity = Math.min(1, 0.35 + count * 0.15)
+    return [lat, lng, intensity]
+  })
+}
+
+const HeatmapLayer = ({ members, isEnabled }) => {
+  const map = useMap()
+
+  const heatPoints = useMemo(() => buildHeatmapData(members), [members])
+
+  useEffect(() => {
+    if (!isEnabled || heatPoints.length === 0) return undefined
+
+    const heatLayer = L.heatLayer(heatPoints, {
+      radius: 34,
+      blur: 28,
+      maxZoom: 15,
+      minOpacity: 0.22,
+      gradient: {
+        0.2: '#2A6F6B',
+        0.45: '#F4A261',
+        0.7: '#E76F51',
+        1: '#B23A48',
+      },
+    })
+
+    heatLayer.addTo(map)
+    return () => {
+      map.removeLayer(heatLayer)
+    }
+  }, [heatPoints, isEnabled, map])
+
+  return null
+}
+
+const MapStability = () => {
+  const map = useMap()
+
+  useEffect(() => {
+    let rafId = 0
+
+    const refreshMap = () => {
+      if (rafId) {
+        cancelAnimationFrame(rafId)
+      }
+
+      rafId = requestAnimationFrame(() => {
+        map.invalidateSize({ pan: false, debounceMoveend: true })
+        map.eachLayer((layer) => {
+          if (typeof layer.redraw === 'function') {
+            layer.redraw()
+          }
+        })
+      })
+    }
+
+    const initialTimer = window.setTimeout(refreshMap, 90)
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        refreshMap()
+      }
+    }
+
+    window.addEventListener('resize', refreshMap)
+    window.addEventListener('orientationchange', refreshMap)
+    window.addEventListener('pageshow', refreshMap)
+    document.addEventListener('visibilitychange', handleVisibility)
+
+    return () => {
+      window.clearTimeout(initialTimer)
+      if (rafId) {
+        cancelAnimationFrame(rafId)
+      }
+      window.removeEventListener('resize', refreshMap)
+      window.removeEventListener('orientationchange', refreshMap)
+      window.removeEventListener('pageshow', refreshMap)
+      document.removeEventListener('visibilitychange', handleVisibility)
+    }
+  }, [map])
+
+  return null
+}
 
 const MapAutoCenter = ({ center }) => {
   const map = useMap()
@@ -37,6 +133,7 @@ const CommunityMap = ({
   center,
   nearbyCenter,
   nearbyRadiusKm,
+  isHeatmapEnabled,
   isMobile,
   onMemberClick,
 }) => (
@@ -50,9 +147,13 @@ const CommunityMap = ({
     <TileLayer
       attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
       url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+      keepBuffer={4}
+      updateWhenIdle
     />
 
+    <MapStability />
     <MapAutoCenter center={center} />
+    <HeatmapLayer members={members} isEnabled={isHeatmapEnabled} />
 
     {nearbyCenter && nearbyRadiusKm ? (
       <>

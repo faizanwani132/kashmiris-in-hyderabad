@@ -23,10 +23,31 @@ import {
 } from './lib/geo'
 
 const MOBILE_BREAKPOINT = 768
+const MEMBERS_CACHE_KEY = 'koh_members_cache_v1'
 
 const readSubmissionTimestamp = () => {
   if (typeof window === 'undefined') return ''
   return window.localStorage.getItem(SUBMISSION_STORAGE_KEY) ?? ''
+}
+
+const readCachedMembers = () => {
+  if (typeof window === 'undefined') return []
+  try {
+    const cached = window.localStorage.getItem(MEMBERS_CACHE_KEY)
+    const parsed = cached ? JSON.parse(cached) : []
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+const writeCachedMembers = (members) => {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.setItem(MEMBERS_CACHE_KEY, JSON.stringify(members))
+  } catch {
+    // Ignore write failures in private mode/quota constraints.
+  }
 }
 
 const useIsMobile = () => {
@@ -53,14 +74,20 @@ const parseMember = (member) => ({
   origin: member.origin ?? '',
 })
 
+const sanitizeMembers = (members) =>
+  (members ?? [])
+    .map(parseMember)
+    .filter((member) => Number.isFinite(member.lat) && Number.isFinite(member.lng))
+
 function App() {
   const isMobile = useIsMobile()
-  const [members, setMembers] = useState([])
+  const [members, setMembers] = useState(() => sanitizeMembers(readCachedMembers()))
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isFindingNearby, setIsFindingNearby] = useState(false)
   const [isAddSheetOpen, setIsAddSheetOpen] = useState(false)
   const [isNearbyCollapsed, setIsNearbyCollapsed] = useState(true)
+  const [isHeatmapEnabled, setIsHeatmapEnabled] = useState(true)
   const [selectedMember, setSelectedMember] = useState(null)
   const [appMessage, setAppMessage] = useState('')
   const [radiusKm, setRadiusKm] = useState(DEFAULT_RADIUS_KM)
@@ -85,16 +112,20 @@ function App() {
 
     const { data, error } = await fetchCommunityMembers()
     if (error) {
-      setAppMessage('Could not load community members right now.')
+      const cachedMembers = sanitizeMembers(readCachedMembers())
+      if (cachedMembers.length > 0) {
+        setMembers(cachedMembers)
+        setAppMessage('Live update failed. Showing last loaded community map.')
+      } else {
+        setAppMessage('Could not load community members right now.')
+      }
       setIsLoading(false)
       return
     }
 
-    setMembers(
-      (data ?? [])
-        .map(parseMember)
-        .filter((member) => Number.isFinite(member.lat) && Number.isFinite(member.lng)),
-    )
+    const normalizedMembers = sanitizeMembers(data)
+    setMembers(normalizedMembers)
+    writeCachedMembers(normalizedMembers)
     setIsLoading(false)
   }
 
@@ -177,12 +208,13 @@ function App() {
   }
 
   return (
-    <div className="relative h-dvh w-full overflow-hidden bg-snow font-body">
+    <div className="app-shell relative w-full overflow-hidden bg-snow font-body">
       <CommunityMap
         members={filteredMembers}
         center={mapCenter}
         nearbyCenter={nearbyCenter}
         nearbyRadiusKm={nearbyCenter ? radiusKm : 0}
+        isHeatmapEnabled={isHeatmapEnabled}
         isMobile={isMobile}
         onMemberClick={setSelectedMember}
       />
@@ -209,9 +241,11 @@ function App() {
           radiusKm={radiusKm}
           isFinding={isFindingNearby}
           autoCenter={autoCenterMap}
+          isHeatmapEnabled={isHeatmapEnabled}
           isCollapsed={isNearbyCollapsed}
           onToggleCollapsed={() => setIsNearbyCollapsed((previous) => !previous)}
           onAutoCenterChange={setAutoCenterMap}
+          onHeatmapToggle={setIsHeatmapEnabled}
           onFindNearby={handleFindNearby}
           onRadiusChange={setRadiusKm}
           onClear={() => setNearbyCenter(null)}
