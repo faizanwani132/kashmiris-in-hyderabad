@@ -4,7 +4,7 @@ export const HYDERABAD_CENTER = {
 }
 
 export const DEFAULT_CITY = 'Hyderabad'
-export const DEFAULT_RADIUS_KM = 3
+export const DEFAULT_RADIUS_KM = 20
 export const LOCATION_PRECISION = 3
 export const PRIVACY_RADIUS_METERS = 300
 export const SUBMISSION_STORAGE_KEY = 'koh_submitted_at'

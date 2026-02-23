@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Circle, MapContainer, Marker, TileLayer, useMap, useMapEvents } from 'react-leaflet'
-import { MapPin, Move, Navigation, ShieldCheck } from 'lucide-react'
+import { ArrowLeft, Check, MapPin, Move, ShieldCheck } from 'lucide-react'
 import BottomSheet from '../ui/BottomSheet'
 import { approximateCoordinates } from '../../lib/geo'
 import { pickerMarkerIcon } from '../../lib/mapIcons'
@@ -34,8 +34,11 @@ const SyncCenter = ({ center }) => {
 }
 
 const MapLocationPicker = ({ onClose, initialLocation, onConfirm }) => {
-  const [selectedLocation, setSelectedLocation] = useState(
-    initialLocation ?? HYDERABAD_CENTER,
+  const [selectedLocation, setSelectedLocation] = useState(initialLocation ?? HYDERABAD_CENTER)
+
+  const approximatePoint = useMemo(
+    () => approximateCoordinates(selectedLocation),
+    [selectedLocation],
   )
 
   return (
@@ -43,88 +46,81 @@ const MapLocationPicker = ({ onClose, initialLocation, onConfirm }) => {
       isOpen
       onClose={onClose}
       title="Choose Location on Map"
-      subtitle="Select an approximate area, not your exact home."
-      className="h-[84dvh] max-w-3xl"
+      subtitle="Pick an approximate area, not exact home."
+      className="h-[78svh] max-w-3xl sm:h-[680px]"
+      zIndex={1300}
+      closeOnBackdrop={false}
     >
-      <div className="grid h-full grid-rows-[auto_1fr_auto] gap-3">
-        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-          <p className="flex items-center gap-2">
-            <ShieldCheck size={16} className="text-pine" />
-            Location is intentionally approximate for privacy.
-          </p>
-          <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-600">
-            <span className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-1">
-              <Move size={12} className="text-pine" />
-              Drag the pin
-            </span>
-            <span className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-1">
-              <MapPin size={12} className="text-pine" />
-              Or tap anywhere
-            </span>
-          </div>
-        </div>
-
-        <div className="overflow-hidden rounded-2xl border border-slate-200 shadow-sm">
-          <MapContainer
+      <div className="relative h-full min-h-0 overflow-hidden rounded-2xl border border-slate-200 shadow-sm">
+        <MapContainer
+          center={[selectedLocation.lat, selectedLocation.lng]}
+          zoom={13}
+          className="h-full w-full"
+          scrollWheelZoom
+        >
+          <TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          />
+          <MapInteractions onSelect={setSelectedLocation} />
+          <SyncCenter center={selectedLocation} />
+          <Circle
             center={[selectedLocation.lat, selectedLocation.lng]}
-            zoom={13}
-            className="h-full w-full"
-            scrollWheelZoom
-          >
-            <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            />
-            <MapInteractions onSelect={setSelectedLocation} />
-            <SyncCenter center={selectedLocation} />
-            <Circle
-              center={[selectedLocation.lat, selectedLocation.lng]}
-              radius={PRIVACY_RADIUS_METERS}
-              pathOptions={{
-                color: '#2A6F6B',
-                fillColor: '#2A6F6B',
-                fillOpacity: 0.12,
-                weight: 1.5,
-              }}
-            />
-            <Marker
-              position={[selectedLocation.lat, selectedLocation.lng]}
-              icon={pickerMarkerIcon}
-              draggable
-              eventHandlers={{
-                dragend: (event) => {
-                  const point = event.target.getLatLng()
-                  setSelectedLocation({ lat: point.lat, lng: point.lng })
-                },
-              }}
-            />
-          </MapContainer>
-        </div>
+            radius={PRIVACY_RADIUS_METERS}
+            pathOptions={{
+              color: '#2A6F6B',
+              fillColor: '#2A6F6B',
+              fillOpacity: 0.12,
+              weight: 1.5,
+            }}
+          />
+          <Marker
+            position={[selectedLocation.lat, selectedLocation.lng]}
+            icon={pickerMarkerIcon}
+            draggable
+            eventHandlers={{
+              dragend: (event) => {
+                const point = event.target.getLatLng()
+                setSelectedLocation({ lat: point.lat, lng: point.lng })
+              },
+            }}
+          />
+        </MapContainer>
 
-        <div className="grid gap-2">
-          <p className="text-xs text-slate-600">
-            Approximate point: {approximateCoordinates(selectedLocation).lat},{' '}
-            {approximateCoordinates(selectedLocation).lng}
-          </p>
-          <div className="grid grid-cols-2 gap-2">
+        <div className="pointer-events-none absolute inset-x-2 top-2 z-[900] grid gap-2">
+          <div className="pointer-events-auto grid grid-cols-2 gap-2">
             <button
               type="button"
               onClick={onClose}
-              className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+              className="inline-flex items-center justify-center gap-1 rounded-xl border border-slate-300 bg-white/95 px-3 py-2.5 text-sm font-semibold text-slate-700 shadow transition hover:bg-slate-100"
             >
+              <ArrowLeft size={14} />
               Back
             </button>
             <button
               type="button"
-              onClick={() => onConfirm(approximateCoordinates(selectedLocation))}
-              className="rounded-xl bg-pine px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-pine/90"
+              onClick={() => onConfirm(approximatePoint)}
+              className="inline-flex items-center justify-center gap-1 rounded-xl bg-pine px-3 py-2.5 text-sm font-semibold text-white shadow transition hover:bg-pine/90"
             >
-              <span className="inline-flex items-center gap-1">
-                <Navigation size={14} />
-                Confirm Location
-              </span>
+              <Check size={14} />
+              Confirm Location
             </button>
           </div>
+          <div className="pointer-events-auto inline-flex items-center gap-1 self-start rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-semibold text-slate-700 shadow">
+            <ShieldCheck size={12} className="text-pine" />
+            Approximate only
+          </div>
+          <div className="pointer-events-auto inline-flex items-center gap-1 self-start rounded-full bg-white/95 px-2.5 py-1 text-[11px] text-slate-600 shadow">
+            <Move size={12} className="text-pine" />
+            Drag pin or tap map
+          </div>
+        </div>
+
+        <div className="pointer-events-none absolute inset-x-2 bottom-2 z-[900] grid gap-2">
+          <p className="pointer-events-auto inline-flex items-center gap-1 self-start rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-semibold text-slate-700 shadow">
+            <MapPin size={12} className="text-pine" />
+            {approximatePoint.lat}, {approximatePoint.lng}
+          </p>
         </div>
       </div>
     </BottomSheet>

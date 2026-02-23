@@ -61,6 +61,7 @@ function App() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isFindingNearby, setIsFindingNearby] = useState(false)
   const [isAddSheetOpen, setIsAddSheetOpen] = useState(false)
+  const [isNearbyCollapsed, setIsNearbyCollapsed] = useState(true)
   const [selectedMember, setSelectedMember] = useState(null)
   const [appMessage, setAppMessage] = useState('')
   const [radiusKm, setRadiusKm] = useState(DEFAULT_RADIUS_KM)
@@ -209,6 +210,8 @@ function App() {
           radiusKm={radiusKm}
           isFinding={isFindingNearby}
           autoCenter={autoCenterMap}
+          isCollapsed={isNearbyCollapsed}
+          onToggleCollapsed={() => setIsNearbyCollapsed((previous) => !previous)}
           onAutoCenterChange={setAutoCenterMap}
           onFindNearby={handleFindNearby}
           onRadiusChange={setRadiusKm}
