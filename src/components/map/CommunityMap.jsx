@@ -11,6 +11,55 @@ import {
 import MarkerClusterGroup from 'react-leaflet-cluster'
 import { createClusterIcon, communityMarkerIcon } from '../../lib/mapIcons'
 
+const MapStability = () => {
+  const map = useMap()
+
+  useEffect(() => {
+    let rafId = 0
+
+    const refreshMap = () => {
+      if (rafId) {
+        cancelAnimationFrame(rafId)
+      }
+
+      rafId = requestAnimationFrame(() => {
+        map.invalidateSize({ pan: false, debounceMoveend: true })
+        map.eachLayer((layer) => {
+          if (typeof layer.redraw === 'function') {
+            layer.redraw()
+          }
+        })
+      })
+    }
+
+    const initialTimer = window.setTimeout(refreshMap, 90)
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        refreshMap()
+      }
+    }
+
+    window.addEventListener('resize', refreshMap)
+    window.addEventListener('orientationchange', refreshMap)
+    window.addEventListener('pageshow', refreshMap)
+    document.addEventListener('visibilitychange', handleVisibility)
+
+    return () => {
+      window.clearTimeout(initialTimer)
+      if (rafId) {
+        cancelAnimationFrame(rafId)
+      }
+      window.removeEventListener('resize', refreshMap)
+      window.removeEventListener('orientationchange', refreshMap)
+      window.removeEventListener('pageshow', refreshMap)
+      document.removeEventListener('visibilitychange', handleVisibility)
+    }
+  }, [map])
+
+  return null
+}
+
 const MapAutoCenter = ({ center }) => {
   const map = useMap()
 
@@ -50,8 +99,11 @@ const CommunityMap = ({
     <TileLayer
       attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
       url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+      keepBuffer={4}
+      updateWhenIdle
     />
 
+    <MapStability />
     <MapAutoCenter center={center} />
 
     {nearbyCenter && nearbyRadiusKm ? (
