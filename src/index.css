@@ -116,6 +116,23 @@ body {
   }
 }
 
+@keyframes new-pin-pulse {
+  0% {
+    transform: scale(0.7);
+    opacity: 0.65;
+  }
+
+  70% {
+    transform: scale(1.35);
+    opacity: 0;
+  }
+
+  100% {
+    transform: scale(1.35);
+    opacity: 0;
+  }
+}
+
 .kashmiri-pin-wrapper,
 .kashmiri-picker-pin-wrapper,
 .kashmiri-cluster-wrapper {
@@ -162,6 +179,24 @@ body {
   border-radius: 9999px;
   background: #fafafa;
   box-shadow: 0 0 0 3px rgba(42, 111, 107, 0.35);
+}
+
+.kashmiri-pin--new::before {
+  content: '';
+  position: absolute;
+  width: 34px;
+  height: 34px;
+  border-radius: 9999px;
+  background: rgba(238, 179, 65, 0.35);
+  animation: new-pin-pulse 1.5s ease-out infinite;
+}
+
+.kashmiri-pin--new .kashmiri-pin__leaf {
+  background: linear-gradient(145deg, #f6bd60, #ee964b);
+}
+
+.kashmiri-pin--new .kashmiri-pin__dot {
+  box-shadow: 0 0 0 4px rgba(246, 189, 96, 0.5);
 }
 
 .kashmiri-picker-pin .kashmiri-pin__dot {

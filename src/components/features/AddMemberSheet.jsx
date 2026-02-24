@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   CheckCircle2,
   Loader2,
@@ -17,8 +17,12 @@ const AddMemberSheet = ({
   isSaving,
   hasSubmitted,
   lastSubmittedAt,
+  canManagePin,
+  ownedMember,
   onClose,
-  onSubmit,
+  onCreate,
+  onUpdate,
+  onDelete,
 }) => {
   const [step, setStep] = useState(1)
   const [name, setName] = useState('')
@@ -27,28 +31,68 @@ const AddMemberSheet = ({
   const [consent, setConsent] = useState(false)
   const [selectedLocation, setSelectedLocation] = useState(null)
   const [method, setMethod] = useState('')
+  const [isEditing, setIsEditing] = useState(false)
   const [isLocating, setIsLocating] = useState(false)
   const [isPickerOpen, setIsPickerOpen] = useState(false)
   const [error, setError] = useState('')
+  const wasOpenRef = useRef(false)
 
   useEffect(() => {
-    if (!isOpen) return
+    if (!isOpen) {
+      wasOpenRef.current = false
+      return
+    }
+
+    if (wasOpenRef.current) return
+    wasOpenRef.current = true
+
     setStep(1)
-    setName('')
-    setArea('')
-    setOrigin('')
     setConsent(false)
-    setSelectedLocation(null)
     setMethod('')
+    setIsEditing(false)
     setIsLocating(false)
     setIsPickerOpen(false)
     setError('')
-  }, [isOpen])
+
+    if (canManagePin && ownedMember) {
+      setName(ownedMember.name ?? '')
+      setArea(ownedMember.area ?? '')
+      setOrigin(ownedMember.origin ?? '')
+      setSelectedLocation({ lat: ownedMember.lat, lng: ownedMember.lng })
+      return
+    }
+
+    setName('')
+    setArea('')
+    setOrigin('')
+    setSelectedLocation(null)
+  }, [isOpen, canManagePin, ownedMember])
 
   const hasValidLocation = useMemo(
     () => selectedLocation && Number.isFinite(selectedLocation.lat) && Number.isFinite(selectedLocation.lng),
     [selectedLocation],
   )
+
+  const isLegacySubmitted = hasSubmitted && !canManagePin
+  const showManagePanel = canManagePin && !isEditing
+  const submitAction = canManagePin ? onUpdate : onCreate
+
+  const startEditing = () => {
+    if (!ownedMember) {
+      setError('Could not load your pin details. Try refreshing once.')
+      return
+    }
+
+    setName(ownedMember.name ?? '')
+    setArea(ownedMember.area ?? '')
+    setOrigin(ownedMember.origin ?? '')
+    setSelectedLocation({ lat: ownedMember.lat, lng: ownedMember.lng })
+    setConsent(false)
+    setStep(1)
+    setMethod('manual')
+    setIsEditing(true)
+    setError('')
+  }
 
   const handleUseCurrentLocation = async () => {
     setMethod('gps')
@@ -92,7 +136,12 @@ const AddMemberSheet = ({
 
     setError('')
 
-    const result = await onSubmit({
+    if (typeof submitAction !== 'function') {
+      setError('This action is not available right now.')
+      return
+    }
+
+    const result = await submitAction({
       name: name.trim(),
       area: area.trim() || null,
       origin: origin.trim() || null,
@@ -105,16 +154,37 @@ const AddMemberSheet = ({
     }
   }
 
+  const handleDelete = async () => {
+    const confirmed = window.confirm(
+      'Remove your pin from the map? You can add it again later from this device.',
+    )
+
+    if (!confirmed) return
+
+    setError('')
+
+    const result = await onDelete()
+    if (!result.ok) {
+      setError(result.error ?? 'Could not remove your pin right now.')
+    }
+  }
+
   return (
     <>
       <BottomSheet
         isOpen={isOpen && !isPickerOpen}
         onClose={onClose}
-        title="Add Me to the Map"
-        subtitle="Approximate location only for safe community connection."
+        title={
+          canManagePin ? (isEditing ? 'Edit My Pin' : 'Manage My Pin') : 'Add Me to the Map'
+        }
+        subtitle={
+          canManagePin
+            ? 'Update details or remove your pin anytime.'
+            : 'Approximate location only for safe community connection.'
+        }
         className="h-[76svh] max-w-2xl sm:h-[640px]"
       >
-        {hasSubmitted ? (
+        {isLegacySubmitted ? (
           <div className="flex h-full flex-col justify-between gap-4">
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
               <p className="inline-flex items-center gap-2 font-semibold text-emerald-800">
@@ -134,6 +204,57 @@ const AddMemberSheet = ({
             >
               Close
             </button>
+          </div>
+        ) : showManagePanel ? (
+          <div className="flex h-full flex-col justify-between gap-4">
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+              <p className="inline-flex items-center gap-2 font-semibold text-emerald-800">
+                <CheckCircle2 size={18} />
+                Your pin is active on the map.
+              </p>
+              {ownedMember ? (
+                <>
+                  <p className="mt-2 text-sm text-emerald-700">
+                    {ownedMember.name} {ownedMember.area ? `- ${ownedMember.area}` : ''}
+                  </p>
+                  <p className="mt-1 text-xs text-emerald-700/90">
+                    {ownedMember.lat}, {ownedMember.lng}
+                  </p>
+                </>
+              ) : (
+                <p className="mt-2 text-sm text-emerald-700">
+                  We could not load your pin details from the latest map data.
+                </p>
+              )}
+            </div>
+
+            {error ? <p className="text-sm font-medium text-rose-700">{error}</p> : null}
+
+            <div className="mt-auto grid gap-2 pt-1">
+              <button
+                type="button"
+                onClick={startEditing}
+                disabled={!ownedMember || isSaving}
+                className="rounded-xl bg-pine px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-pine/90 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Edit My Pin
+              </button>
+              <button
+                type="button"
+                onClick={handleDelete}
+                disabled={isSaving}
+                className="rounded-xl border border-rose-300 px-4 py-2.5 text-sm font-semibold text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isSaving ? 'Removing...' : 'Remove My Pin'}
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+              >
+                Close
+              </button>
+            </div>
           </div>
         ) : (
           <div className="flex h-full flex-col gap-3">
@@ -200,7 +321,14 @@ const AddMemberSheet = ({
                 <div className="mt-auto grid grid-cols-2 gap-2 pt-1">
                   <button
                     type="button"
-                    onClick={onClose}
+                    onClick={() => {
+                      if (canManagePin) {
+                        setError('')
+                        setIsEditing(false)
+                        return
+                      }
+                      onClose()
+                    }}
                     className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
                   >
                     Cancel
@@ -291,7 +419,7 @@ const AddMemberSheet = ({
                     disabled={isSaving}
                     className="rounded-xl bg-saffron px-4 py-2.5 text-sm font-bold text-slate-900 transition hover:bg-[#e89456] disabled:cursor-not-allowed disabled:opacity-70"
                   >
-                    {isSaving ? 'Saving...' : 'Add to Map'}
+                    {isSaving ? 'Saving...' : canManagePin ? 'Save Changes' : 'Add to Map'}
                   </button>
                 </div>
               </form>

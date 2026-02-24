@@ -9,12 +9,20 @@ import {
   DEFAULT_CITY,
   DEFAULT_RADIUS_KM,
   HYDERABAD_CENTER,
+  MAX_RADIUS_KM,
+  MIN_RADIUS_KM,
+  NEW_MEMBER_HIGHLIGHT_MINUTES,
+  OWNERSHIP_STORAGE_KEY,
   SUBMISSION_STORAGE_KEY,
 } from './constants'
 import {
+  createOwnerToken,
+  deleteCommunityMember,
   fetchCommunityMembers,
   hasSupabaseConfig,
   insertCommunityMember,
+  isMissingManagementFunction,
+  updateCommunityMember,
 } from './lib/supabase'
 import {
   approximateCoordinates,
@@ -24,10 +32,58 @@ import {
 
 const MOBILE_BREAKPOINT = 768
 const MEMBERS_CACHE_KEY = 'koh_members_cache_v1'
+const MEMBERS_REFRESH_INTERVAL_MS = 60 * 1000
+const NEW_MARKER_REFRESH_INTERVAL_MS = 30 * 1000
+const NEW_MEMBER_WINDOW_MS = NEW_MEMBER_HIGHLIGHT_MINUTES * 60 * 1000
 
 const readSubmissionTimestamp = () => {
   if (typeof window === 'undefined') return ''
   return window.localStorage.getItem(SUBMISSION_STORAGE_KEY) ?? ''
+}
+
+const writeSubmissionTimestamp = (timestamp) => {
+  if (typeof window === 'undefined') return
+  window.localStorage.setItem(SUBMISSION_STORAGE_KEY, timestamp)
+}
+
+const clearSubmissionTimestamp = () => {
+  if (typeof window === 'undefined') return
+  window.localStorage.removeItem(SUBMISSION_STORAGE_KEY)
+}
+
+const readOwnershipRecord = () => {
+  if (typeof window === 'undefined') return null
+
+  try {
+    const raw = window.localStorage.getItem(OWNERSHIP_STORAGE_KEY)
+    const parsed = raw ? JSON.parse(raw) : null
+
+    if (!parsed || typeof parsed !== 'object') return null
+    if (typeof parsed.memberId !== 'string') return null
+    if (typeof parsed.ownerToken !== 'string') return null
+
+    return {
+      memberId: parsed.memberId,
+      ownerToken: parsed.ownerToken,
+    }
+  } catch {
+    return null
+  }
+}
+
+const writeOwnershipRecord = (record) => {
+  if (typeof window === 'undefined') return
+
+  try {
+    window.localStorage.setItem(OWNERSHIP_STORAGE_KEY, JSON.stringify(record))
+  } catch {
+    // Ignore write failures in private mode/quota constraints.
+  }
+}
+
+const clearOwnershipRecord = () => {
+  if (typeof window === 'undefined') return
+  window.localStorage.removeItem(OWNERSHIP_STORAGE_KEY)
 }
 
 const readCachedMembers = () => {
@@ -48,6 +104,12 @@ const writeCachedMembers = (members) => {
   } catch {
     // Ignore write failures in private mode/quota constraints.
   }
+}
+
+const clampRadius = (value) => {
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) return DEFAULT_RADIUS_KM
+  return Math.min(MAX_RADIUS_KM, Math.max(MIN_RADIUS_KM, Math.round(numeric)))
 }
 
 const useIsMobile = () => {
@@ -79,6 +141,32 @@ const sanitizeMembers = (members) =>
     .map(parseMember)
     .filter((member) => Number.isFinite(member.lat) && Number.isFinite(member.lng))
 
+const isNewMember = (member, nowMs) => {
+  const createdAtMs = Date.parse(member.created_at ?? '')
+  if (!Number.isFinite(createdAtMs)) return false
+  return nowMs - createdAtMs <= NEW_MEMBER_WINDOW_MS
+}
+
+const buildMemberPayload = (formPayload) => {
+  const roundedCoordinates = approximateCoordinates({
+    lat: formPayload.lat,
+    lng: formPayload.lng,
+  })
+
+  return {
+    name: formPayload.name,
+    area: formPayload.area,
+    origin: formPayload.origin,
+    lat: roundedCoordinates.lat,
+    lng: roundedCoordinates.lng,
+    city: DEFAULT_CITY,
+    visible: true,
+  }
+}
+
+const MANAGEMENT_SCHEMA_MESSAGE =
+  'Pin management is not ready in Supabase yet. Run the updated supabase/schema.sql and try again.'
+
 function App() {
   const isMobile = useIsMobile()
   const [members, setMembers] = useState(() => sanitizeMembers(readCachedMembers()))
@@ -95,10 +183,27 @@ function App() {
   const [autoCenterMap, setAutoCenterMap] = useState(true)
   const [mapCenter, setMapCenter] = useState(HYDERABAD_CENTER)
   const [submittedAt, setSubmittedAt] = useState(readSubmissionTimestamp)
+  const [ownershipRecord, setOwnershipRecord] = useState(readOwnershipRecord)
+  const [nowMs, setNowMs] = useState(Date.now)
 
-  const hasSubmitted = Boolean(submittedAt)
+  const hasOwnership = Boolean(ownershipRecord?.memberId && ownershipRecord?.ownerToken)
+  const hasSubmitted = Boolean(submittedAt || hasOwnership)
+  const canOnlyViewSubmission = hasSubmitted && !hasOwnership
 
-  const loadMembers = async () => {
+  const ownedMember = useMemo(() => {
+    if (!ownershipRecord?.memberId) return null
+    return members.find((member) => member.id === ownershipRecord.memberId) ?? null
+  }, [members, ownershipRecord?.memberId])
+
+  const highlightedMemberIds = useMemo(() => {
+    const ids = members
+      .filter((member) => isNewMember(member, nowMs))
+      .map((member) => member.id)
+
+    return new Set(ids)
+  }, [members, nowMs])
+
+  const loadMembers = async ({ showLoader = false } = {}) => {
     if (!hasSupabaseConfig) {
       setAppMessage(
         'Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env before loading members.',
@@ -107,7 +212,10 @@ function App() {
       return
     }
 
-    setIsLoading(true)
+    if (showLoader) {
+      setIsLoading(true)
+    }
+
     setAppMessage('')
 
     const { data, error } = await fetchCommunityMembers()
@@ -130,7 +238,21 @@ function App() {
   }
 
   useEffect(() => {
-    loadMembers()
+    loadMembers({ showLoader: true })
+
+    const refreshInterval = window.setInterval(() => {
+      loadMembers()
+    }, MEMBERS_REFRESH_INTERVAL_MS)
+
+    return () => window.clearInterval(refreshInterval)
+  }, [])
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setNowMs(Date.now())
+    }, NEW_MARKER_REFRESH_INTERVAL_MS)
+
+    return () => window.clearInterval(intervalId)
   }, [])
 
   useEffect(() => {
@@ -151,6 +273,7 @@ function App() {
   const handleFindNearby = async () => {
     setIsFindingNearby(true)
     setAppMessage('')
+
     try {
       const location = await getCurrentLocation()
       const approximateLocation = approximateCoordinates(location)
@@ -165,7 +288,7 @@ function App() {
     }
   }
 
-  const handleAddMember = async (formPayload) => {
+  const handleCreateMember = async (formPayload) => {
     if (!hasSupabaseConfig) {
       return { ok: false, error: 'Supabase keys are missing in .env.' }
     }
@@ -173,30 +296,74 @@ function App() {
     setIsSubmitting(true)
     setAppMessage('')
 
-    const roundedCoordinates = approximateCoordinates({
-      lat: formPayload.lat,
-      lng: formPayload.lng,
+    const payload = buildMemberPayload(formPayload)
+    const ownerToken = createOwnerToken()
+
+    const { data, error } = await insertCommunityMember({
+      ...payload,
+      ownerToken,
     })
 
-    const payload = {
-      name: formPayload.name,
-      area: formPayload.area,
-      origin: formPayload.origin,
-      lat: roundedCoordinates.lat,
-      lng: roundedCoordinates.lng,
-      city: DEFAULT_CITY,
-      visible: true,
-    }
-
-    const { error } = await insertCommunityMember(payload)
     if (error) {
       setIsSubmitting(false)
+      if (isMissingManagementFunction(error)) {
+        return { ok: false, error: MANAGEMENT_SCHEMA_MESSAGE }
+      }
+
       return { ok: false, error: 'Could not add your location right now. Please try again.' }
     }
 
+    if (!data?.id) {
+      setIsSubmitting(false)
+      return { ok: false, error: 'Member was created but no id was returned.' }
+    }
+
     const timestamp = new Date().toISOString()
-    window.localStorage.setItem(SUBMISSION_STORAGE_KEY, timestamp)
+    const nextOwnership = {
+      memberId: data.id,
+      ownerToken,
+    }
+
+    writeSubmissionTimestamp(timestamp)
+    writeOwnershipRecord(nextOwnership)
     setSubmittedAt(timestamp)
+    setOwnershipRecord(nextOwnership)
+    setMapCenter({ lat: payload.lat, lng: payload.lng })
+    setNearbyCenter(null)
+    setRadiusKm(DEFAULT_RADIUS_KM)
+    setIsAddSheetOpen(false)
+    setNowMs(Date.now())
+
+    await loadMembers()
+    setIsSubmitting(false)
+    return { ok: true }
+  }
+
+  const handleUpdateMember = async (formPayload) => {
+    if (!ownershipRecord?.memberId || !ownershipRecord.ownerToken) {
+      return { ok: false, error: 'No ownership token found on this device.' }
+    }
+
+    setIsSubmitting(true)
+    setAppMessage('')
+
+    const payload = buildMemberPayload(formPayload)
+
+    const { error } = await updateCommunityMember({
+      memberId: ownershipRecord.memberId,
+      ownerToken: ownershipRecord.ownerToken,
+      payload,
+    })
+
+    if (error) {
+      setIsSubmitting(false)
+      if (isMissingManagementFunction(error)) {
+        return { ok: false, error: MANAGEMENT_SCHEMA_MESSAGE }
+      }
+
+      return { ok: false, error: 'Could not update your pin right now. Please try again.' }
+    }
+
     setMapCenter({ lat: payload.lat, lng: payload.lng })
     setNearbyCenter(null)
     setRadiusKm(DEFAULT_RADIUS_KM)
@@ -205,6 +372,48 @@ function App() {
     await loadMembers()
     setIsSubmitting(false)
     return { ok: true }
+  }
+
+  const handleDeleteMember = async () => {
+    if (!ownershipRecord?.memberId || !ownershipRecord.ownerToken) {
+      return { ok: false, error: 'No ownership token found on this device.' }
+    }
+
+    setIsSubmitting(true)
+    setAppMessage('')
+
+    const { data, error } = await deleteCommunityMember({
+      memberId: ownershipRecord.memberId,
+      ownerToken: ownershipRecord.ownerToken,
+    })
+
+    if (error) {
+      setIsSubmitting(false)
+      if (isMissingManagementFunction(error)) {
+        return { ok: false, error: MANAGEMENT_SCHEMA_MESSAGE }
+      }
+
+      return { ok: false, error: 'Could not remove your pin right now. Please try again.' }
+    }
+
+    clearOwnershipRecord()
+    clearSubmissionTimestamp()
+    setOwnershipRecord(null)
+    setSubmittedAt('')
+    setSelectedMember(null)
+    setIsAddSheetOpen(false)
+    setRadiusKm(DEFAULT_RADIUS_KM)
+    setNearbyCenter(null)
+    const nextMessage = data?.deleted ? 'Your pin was removed from the map.' : 'Pin no longer exists.'
+
+    await loadMembers()
+    setAppMessage(nextMessage)
+    setIsSubmitting(false)
+    return { ok: true }
+  }
+
+  const handleRadiusChange = (nextRadius) => {
+    setRadiusKm(clampRadius(nextRadius))
   }
 
   return (
@@ -216,6 +425,7 @@ function App() {
         nearbyRadiusKm={nearbyCenter ? radiusKm : 0}
         isHeatmapEnabled={isHeatmapEnabled}
         isMobile={isMobile}
+        highlightedMemberIds={highlightedMemberIds}
         onMemberClick={setSelectedMember}
       />
 
@@ -247,7 +457,7 @@ function App() {
           onAutoCenterChange={setAutoCenterMap}
           onHeatmapToggle={setIsHeatmapEnabled}
           onFindNearby={handleFindNearby}
-          onRadiusChange={setRadiusKm}
+          onRadiusChange={handleRadiusChange}
           onClear={() => setNearbyCenter(null)}
         />
 
@@ -268,15 +478,15 @@ function App() {
       <button
         type="button"
         onClick={() => setIsAddSheetOpen(true)}
-        disabled={hasSubmitted}
+        disabled={canOnlyViewSubmission}
         className={`fixed bottom-20 right-4 z-[700] inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-bold shadow-soft transition ${
-          hasSubmitted
+          canOnlyViewSubmission
             ? 'cursor-not-allowed bg-slate-300 text-slate-700'
             : 'bg-saffron text-slate-900 hover:bg-[#e8924f]'
         }`}
       >
         <MapPinPlus size={16} />
-        {hasSubmitted ? 'Already Added' : 'Add Me to the Map'}
+        {hasOwnership ? 'Manage My Pin' : hasSubmitted ? 'Already Added' : 'Add Me to the Map'}
       </button>
 
       <AddMemberSheet
@@ -284,8 +494,12 @@ function App() {
         isSaving={isSubmitting}
         hasSubmitted={hasSubmitted}
         lastSubmittedAt={submittedAt}
+        canManagePin={hasOwnership}
+        ownedMember={ownedMember}
         onClose={() => setIsAddSheetOpen(false)}
-        onSubmit={handleAddMember}
+        onCreate={handleCreateMember}
+        onUpdate={handleUpdateMember}
+        onDelete={handleDeleteMember}
       />
 
       <MemberDetailsSheet

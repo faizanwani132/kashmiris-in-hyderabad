@@ -8,7 +8,7 @@ import {
   Navigation,
   SlidersHorizontal,
 } from 'lucide-react'
-import { RADIUS_OPTIONS } from '../../constants'
+import { MAX_RADIUS_KM, MIN_RADIUS_KM } from '../../constants'
 
 const NearbyControls = ({
   nearbyCenter,
@@ -118,22 +118,25 @@ const NearbyControls = ({
       </div>
 
       <div className="mt-3">
-        <p className="mb-1 text-xs text-slate-600">Radius filter</p>
-        <div className="grid grid-cols-4 gap-2">
-          {RADIUS_OPTIONS.map((option) => (
-            <button
-              key={option}
-              type="button"
-              onClick={() => onRadiusChange(option)}
-              className={`rounded-xl px-2 py-2 text-sm font-semibold transition ${
-                option === radiusKm
-                  ? 'bg-saffron text-slate-900'
-                  : 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
-              }`}
-            >
-              {option} km
-            </button>
-          ))}
+        <div className="rounded-xl bg-slate-50 px-3 py-2.5">
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-xs text-slate-600">Radius filter</p>
+            <p className="text-xs font-semibold text-slate-800">{radiusKm} km</p>
+          </div>
+          <input
+            type="range"
+            min={MIN_RADIUS_KM}
+            max={MAX_RADIUS_KM}
+            step={1}
+            value={radiusKm}
+            onChange={(event) => onRadiusChange(Number(event.target.value))}
+            aria-label="Nearby radius in kilometers"
+            className="h-2 w-full cursor-pointer accent-pine"
+          />
+          <div className="mt-1 flex items-center justify-between text-[11px] text-slate-500">
+            <span>{MIN_RADIUS_KM} km</span>
+            <span>{MAX_RADIUS_KM} km</span>
+          </div>
         </div>
       </div>
     </section>

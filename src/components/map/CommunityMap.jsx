@@ -11,7 +11,11 @@ import {
   useMap,
 } from 'react-leaflet'
 import MarkerClusterGroup from 'react-leaflet-cluster'
-import { createClusterIcon, communityMarkerIcon } from '../../lib/mapIcons'
+import {
+  communityMarkerIcon,
+  createClusterIcon,
+  newCommunityMarkerIcon,
+} from '../../lib/mapIcons'
 
 const buildHeatmapData = (members) => {
   const groupedByCoordinate = new Map()
@@ -120,9 +124,16 @@ const MapAutoCenter = ({ center }) => {
   return null
 }
 
-const MemberPopupContent = ({ member }) => (
+const MemberPopupContent = ({ member, isNew }) => (
   <div className="min-w-[180px] text-sm">
-    <p className="font-heading text-lg font-semibold text-slate-900">{member.name}</p>
+    <div className="flex items-start justify-between gap-2">
+      <p className="font-heading text-lg font-semibold text-slate-900">{member.name}</p>
+      {isNew ? (
+        <span className="rounded-full bg-saffron/30 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-900">
+          New
+        </span>
+      ) : null}
+    </div>
     <p className="text-slate-700">{member.area || 'Area not shared'}</p>
     <p className="mt-1 text-xs text-pine">Kashmiri living nearby</p>
   </div>
@@ -135,6 +146,7 @@ const CommunityMap = ({
   nearbyRadiusKm,
   isHeatmapEnabled,
   isMobile,
+  highlightedMemberIds,
   onMemberClick,
 }) => (
   <MapContainer
@@ -181,24 +193,27 @@ const CommunityMap = ({
       iconCreateFunction={createClusterIcon}
       maxClusterRadius={45}
     >
-      {members.map((member) => (
-        <Marker
-          key={member.id}
-          position={[member.lat, member.lng]}
-          icon={communityMarkerIcon}
-          eventHandlers={{
-            click: () => {
-              if (isMobile) onMemberClick(member)
-            },
-          }}
-        >
-          {!isMobile ? (
-            <Popup>
-              <MemberPopupContent member={member} />
-            </Popup>
-          ) : null}
-        </Marker>
-      ))}
+      {members.map((member) => {
+        const isNew = highlightedMemberIds?.has(member.id)
+        return (
+          <Marker
+            key={member.id}
+            position={[member.lat, member.lng]}
+            icon={isNew ? newCommunityMarkerIcon : communityMarkerIcon}
+            eventHandlers={{
+              click: () => {
+                if (isMobile) onMemberClick({ ...member, isNew })
+              },
+            }}
+          >
+            {!isMobile ? (
+              <Popup>
+                <MemberPopupContent member={member} isNew={isNew} />
+              </Popup>
+            ) : null}
+          </Marker>
+        )
+      })}
     </MarkerClusterGroup>
   </MapContainer>
 )

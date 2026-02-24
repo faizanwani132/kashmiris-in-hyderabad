@@ -7,7 +7,7 @@ Privacy-first mobile web app to help Kashmiris in Hyderabad discover nearby comm
 - React + Vite
 - Tailwind CSS
 - Leaflet + OpenStreetMap + marker clustering
-- Supabase (public read + public insert, no auth flow)
+- Supabase (public read + RPC-based writes, no auth flow)
 - Lucide icons
 
 ## Features
@@ -20,8 +20,9 @@ Privacy-first mobile web app to help Kashmiris in Hyderabad discover nearby comm
   - Use current location (browser geolocation)
   - Choose manually on map with draggable pin/tap-to-drop
 - Mandatory privacy blur: all coordinates rounded to 3 decimals before insert
-- Radius discovery (`1km / 3km / 5km`) with optional auto-center
-- One submission per device via `localStorage`
+- Radius slider (`1km - 100km`) with optional auto-center
+- New pins highlighted on the map for 10 minutes
+- One submission per device via `localStorage`, with self-service edit/remove for the same device
 - Fixed legal/safety footer
 
 ## Project Setup
@@ -68,25 +69,27 @@ Table used: `community_members`
 | city | text |
 | visible | boolean |
 | created_at | timestamp |
+| updated_at | timestamp |
+| owner_token_hash | text (not selectable by anon) |
 
 Security rules applied in SQL:
 
 - Public `select`
-- Public `insert`
-- No `update`/`delete` policies for anon/authenticated clients
-- Insert policy enforces:
-  - `city = 'Hyderabad'`
-  - `lat` and `lng` must already be rounded to 3 decimals
+- Direct table `insert`/`update`/`delete` revoked for anon/authenticated clients
+- `insert_community_member`, `update_community_member`, and `delete_community_member` RPC functions for managed writes
+- Owner token hash stored server-side to enable device-level edit/delete
+- Coordinates are rounded to 3 decimals on insert/update
 
 ## Anti-Spam Rule
 
-The app stores `koh_submitted_at` in localStorage after successful insert.
-That key disables further submissions from the same device/browser.
+The app stores both `koh_submitted_at` and `koh_member_ownership_v1` in localStorage after successful insert.
+These keys enable the same device/browser to edit or remove the submitted pin.
 
 For local testing, clear it manually from devtools:
 
 ```js
 localStorage.removeItem('koh_submitted_at')
+localStorage.removeItem('koh_member_ownership_v1')
 ```
 
 ## Build
